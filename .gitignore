@@ -1,0 +1,9 @@
+bin
+composer.lock
+composer.phar
+report.html
+vendor
+*.swp
+.DS_Store
+/nbproject/private/
+chromedriver
