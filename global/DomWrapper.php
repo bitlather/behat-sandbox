@@ -49,30 +49,30 @@ class DomWrapper{
         }
     }
 
-    public function DomsByCss($CssIdentifier){
-        $Attempts = 10;
-        $Doms = null;
-        while($Attempts-- >= 0 && ($Doms == null || sizeof($Doms) == 0)){
-
-            $Doms = $this->NodeElement->findAll('css', $CssIdentifier);
-
-            # Just waiting for an extra second sometimes corrects issues with finding doms
-            if($Doms == NULL || sizeof($Doms) == 0){
-                sleep(1);
-                if($Attempts == 0){
-                    throw new \Exception("Doms with identifier [[".$CssIdentifier."]] were not found.\n".Backtrace());
-                }
-            }
-        }
-
-        # Wrap the doms
-        $WrappedDoms = array();
-        foreach($Doms as $NodeElement){
-            $WrappedDoms[] = new self($NodeElement);
-        }
-
-        return $WrappedDoms;
-    }
+#    public function DomsByCss($CssIdentifier){
+#        $Attempts = 10;
+#        $Doms = null;
+#        while($Attempts-- >= 0 && ($Doms == null || sizeof($Doms) == 0)){
+#
+#            $Doms = $this->NodeElement->findAll('css', $CssIdentifier);
+#
+#            # Just waiting for an extra second sometimes corrects issues with finding doms
+#            if($Doms == NULL || sizeof($Doms) == 0){
+#                sleep(1);
+#                if($Attempts == 0){
+#                    throw new \Exception("Doms with identifier [[".$CssIdentifier."]] were not found.\n".Backtrace());
+#                }
+#            }
+#        }
+#
+#        # Wrap the doms
+#        $WrappedDoms = array();
+#        foreach($Doms as $NodeElement){
+#            $WrappedDoms[] = new self($NodeElement);
+#        }
+#
+#        return $WrappedDoms;
+#    }
 
     public function DomBy(){
         $args = func_get_args();

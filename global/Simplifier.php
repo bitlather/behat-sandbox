@@ -4,18 +4,9 @@ class Simplifier{
     # Only code in this file should access these variables 
     public static 
         $F,                        # Feature context object
-        $ApiV1BaseUrl,             # Base URL for all API v1 (swagger) requests
-        $ApiV2BaseUrl,             # Base URL for all API v2 requests
-        $ApiVerifiesSsl,           # Whether API curl requests should verify SSL
         $TestId,                   # Unicode timestamp that represents when scenario started to run
         $StartTimers,              # StartTimer() and StopTimer() use this
-        $Memory,                   # Where Remember(), Recall(), etc store their values
-        $CanQueryDatabase = false, # Can test directly query the database?
-        $dbc,                      # Database connection
-        $ExistingAccountEmail,     # Who to log in as for running tests on an account that exists
-        $ExistingAccountPassword;  # Who to log in as for running tests on an account that exists
-
-    #*DTA when a customer exists test is run, verify it doesnt say something went wrong or don't use a gmail address. If don't use a gmail address, tell user to turn on test transactions. If something went wrong, tell user to verify migrations. PLAN: verify url after confirm is sent. If fail, tell user that they need to turn on test transactions to disable the spam blocker AND they may need to update their migration.
+        $Memory;                   # Where Remember(), Recall(), etc store their values
 
     public static function IncludeConstants(){
         require(getcwd()."/constants/disabilities.php");
@@ -31,7 +22,7 @@ class Simplifier{
         self::$TestId = time();
         self::$StartTimers = array();
 
-ini_set('memory_limit','100M'); # INCREASE MEMORY ALLOCATED TO RUNNING THIS TEST - TEMPORARY FIX
+        ini_set('memory_limit','100M');
 
         # Include order matters
         self::IncludeDirectory('global');
