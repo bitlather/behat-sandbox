@@ -33,72 +33,9 @@ class Simplifier{
 
 ini_set('memory_limit','100M'); # INCREASE MEMORY ALLOCATED TO RUNNING THIS TEST - TEMPORARY FIX
 
-        # Necessary for API requests
-        if(isset($contextParameters['api_v1_base_url'])){
-            self::$ApiV1BaseUrl = $contextParameters['api_v1_base_url'];
-        }
-        if(isset($contextParameters['api_v2_base_url'])){
-            self::$ApiV2BaseUrl = $contextParameters['api_v2_base_url'];
-        }
-        if(isset($contextParameters['api_verifies_ssl'])){
-            self::$ApiVerifiesSsl = $contextParameters['api_verifies_ssl'];
-        } else {
-            self::$ApiVerifiesSsl = true;
-        }
-
-        # Set up database connection if allowed
-        if(!isset($contextParameters['disable_db_query']) || !$contextParameters['disable_db_query']){
-            $host = $contextParameters['db_host'];
-            $user = $contextParameters['db_user'];
-            $password = $contextParameters['db_password'];
-            self::$dbc = new PDO('mysql:host='.$host.';dbname=resumator_db;', $user, $password);
-            self::$dbc->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            self::$CanQueryDatabase = true;
-        }
-
-        # Set up account to log into for running some tests
-        if(isset($contextParameters['existing_account_email'], $contextParameters['existing_account_password'])){
-            self::$ExistingAccountEmail    = $contextParameters['existing_account_email'];
-            self::$ExistingAccountPassword = $contextParameters['existing_account_password'];
-        }
-
         # Include order matters
         self::IncludeDirectory('global');
-        self::IncludeDirectory($suiteDirectory.'/bootstrap_app');
-        if(is_dir($suiteDirectory.'/bootstrap_api_v1')){
-            self::IncludeDirectory($suiteDirectory.'/bootstrap_api_v1');
-        }
-        if(is_dir($suiteDirectory.'/bootstrap_api_v2')){
-            self::IncludeDirectory($suiteDirectory.'/bootstrap_api_v2');
-        }
         self::IncludeDirectory($suiteDirectory.'/bootstrap');
-    }
-
-    public static function ApiV1BaseUrl(){
-        if(strlen(self::$ApiV1BaseUrl) == 0){
-            throw new \Exception("API v1 base URL was not configured in behat.yml");
-        }
-        return self::$ApiV1BaseUrl;
-    }
-
-    public static function ApiV2BaseUrl($Email, $Password){
-        if(strlen(self::$ApiV2BaseUrl) == 0){
-            throw new \Exception("API v2 base URL was not configured in behat.yml");
-        }
-
-        if(!StartsWith(self::$ApiV2BaseUrl, "https://")){
-            throw new \Exception("API v2 base URL must be configured in behat.yml to start with 'https://'");
-        }
-
-        $Hostname = substr(self::$ApiV2BaseUrl, strlen("https://"));
-
-        $Url = "https://".urlencode($Email).":".urlencode($Password)."@".$Hostname;
-
-        return $Url;
-    }
-
-    public static function ApiVerifiesSsl(){
-        return self::$ApiVerifiesSsl;
     }
 
     private static function IncludeDirectory($path) {
@@ -113,299 +50,6 @@ ini_set('memory_limit','100M'); # INCREASE MEMORY ALLOCATED TO RUNNING THIS TEST
     }
 }
 
-define("API_ATTEMPTS", 5); #*DTA put elsewhere, maybe simplifier class
-define("API_SLEEP_SECONDS", 3);
-
-function GETv1($endpoint, $data = array()){#*DTA add to documentation
-    $data["apikey"] = Recall("APIv1 Key"); #*DTA document that this gets passed automatically
-
-    for($attempts = API_ATTEMPTS; $attempts > 0; $attempts--){
-
-        $url = \Simplifier::ApiV1BaseUrl() . $endpoint;
-
-        $curl = curl_init();
-
-        $url = sprintf("%s?%s", $url, http_build_query($data));
-
-        #*DTA make this better; use parts from POSTv1()
-        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, \Simplifier::ApiVerifiesSsl());
-        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, \Simplifier::ApiVerifiesSsl());
-
-        curl_setopt($curl, CURLOPT_URL, $url);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
-
-        $result = curl_exec($curl);
-
-        $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-        curl_close($curl);
-
-        //*DTA should probably move this sort of logic elsewhere for handling GET too, so it's all in one place
-        if($status == 0 && strlen($result) == 0){
-            throw new \Exception("Failed to GET. Perhaps there is an SSL issue on the server? You can ignore SSL issues in behat.yml.");
-        }
-
-        # If status is 503 then continue because I think it is a byproduct of rate limiting.
-        if($status != 200 && $status != 503){
-            throw new \Exception("Failed to GET. Http response code: ".$status);
-        }
-
-        if(strpos($result, "503 Service Temporarily Unavailable") === FALSE && strlen($result) > 0){ //*DTA could just check status=503, or move this above the check for 200
-            # Return results if success
-            $json = json_decode($result, true);
-            if(json_last_error() != JSON_ERROR_NONE){
-                throw new \Exception("Failed to GET. Result was not json. Result:\n\n".print_r($result,true));
-            }
-            return $json;
-        }
-
-        sleep(API_SLEEP_SECONDS);
-    }
-    # API request failed too many times
-    throw new \Exception("GET attempt failed too many times.");
-}
-
-function GETv2($endpoint, $Email, $Password, $data = array()){
-    if(StartsWith($endpoint, "/")){
-        DebugEcho("WARNING: ".__METHOD__." You passed an unecessary slash '/' at the beginning of the endpoint. ");
-        $endpoint = substr($endpoint, 1);
-    }
-    $url = \Simplifier::ApiV2BaseUrl($Email, $Password) . $endpoint;
-
-    DebugEcho("GETv2 requests $url /// endpoint: $endpoint");
-
-    #echo"URL: ",$url,"\n";
-    $curl = curl_init();
-
-    $url = sprintf("%s?%s", $url, http_build_query($data));
-
-    #*DTA make this better; use parts from POSTv1()
-    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, \Simplifier::ApiVerifiesSsl());
-    curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, \Simplifier::ApiVerifiesSsl());
-
-    curl_setopt($curl, CURLOPT_URL, $url);
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
-
-    $result = curl_exec($curl);
-
-    $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-    curl_close($curl);
-
-    #echo "STATUS: ",$status;
-    #echo"\nRESULT: \n";print_r($result);
-
-    $ResultJson = json_decode($result, true);
-    if(json_last_error() != JSON_ERROR_NONE){
-        throw new \Exception("Failed to GET. Result was not json. Result:\n\n".print_r($result,true));
-    }
-
-    return array(
-        "httpStatusCode" => $status,
-        "result" => $ResultJson);
-}
-
-function DELETEv2($endpoint, $Email, $Password, $data = array()){
-    $url = \Simplifier::ApiV2BaseUrl($Email, $Password) . $endpoint;
-
-    #echo"URL: ",$url,"\n";
-
-    $curl = curl_init();
-
-    #$url = sprintf("%s?%s", $url, http_build_query($data));
-
-    #echo"URL: ",$url,"\n";
-
-    $data_string = json_encode(array()); # For some reason our API requires data be sent, like a POST request
-    curl_setopt($curl, CURLOPT_HTTPHEADER, array(
-        'Content-Type: application/json',
-        'Content-Length: ' . strlen($data_string)));
-    curl_setopt($curl, CURLOPT_POSTFIELDS, $data_string);
-    curl_setopt($curl, CURLOPT_POST, TRUE);
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
-
-    #*DTA make this better; use parts from POSTv1()
-    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, \Simplifier::ApiVerifiesSsl());
-    curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, \Simplifier::ApiVerifiesSsl());
-
-    curl_setopt($curl, CURLOPT_URL, $url);
-    curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "DELETE");
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
-
-    $result = curl_exec($curl);
-
-    $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-    curl_close($curl);
-
-    #echo "STATUS: ",$status;
-    #echo"\nRESULT: \n";print_r($result);
-
-    $ResultJson = json_decode($result, true);
-    if(json_last_error() != JSON_ERROR_NONE){
-        throw new \Exception("Failed to DELETE. Result was not json. Result:\n\n".print_r($result,true));
-    }
-
-    return array(
-        "httpStatusCode" => $status,
-        "result" => $ResultJson);
-}
-
-function POSTv1($endpoint, $data = array()){
-    $data["apikey"] = Recall("APIv1 Key"); #*DTA document that this gets passed automatically
-    for($attempts = API_ATTEMPTS; $attempts > 0; $attempts--){
-
-        $url = \Simplifier::ApiV1BaseUrl() . $endpoint;
-
-        $curl = curl_init();
-
-        $data_string = json_encode($data);
-        curl_setopt($curl, CURLOPT_HTTPHEADER, array(
-            'Content-Type: application/json',
-            'Content-Length: ' . strlen($data_string)));
-        curl_setopt($curl, CURLOPT_POSTFIELDS, $data_string);
-        curl_setopt($curl, CURLOPT_POST, TRUE);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
-
-        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, \Simplifier::ApiVerifiesSsl());
-        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, \Simplifier::ApiVerifiesSsl());
-
-        curl_setopt($curl, CURLOPT_URL, $url);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
-
-        $result = curl_exec($curl);
-
-        $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-#echo"POST STATUS ",$status,"\n";
-#echo"POST RESULT ";print_r($result);echo"\n";
-
-        //*DTA should probably move this sort of logic elsewhere for handling GET too, so it's all in one place
-        if($status == 0 && strlen($result) == 0){
-            throw new \Exception("Failed to POST. Perhaps there is an SSL issue on the server? You can ignore SSL issues in behat.yml.");
-        }
-
-        # If status is 503 then continue because I think it is a byproduct of rate limiting.
-        if($status != 200 && $status != 503){
-            throw new \Exception("Failed to POST. Http response code: ".$status);
-        }
-
-        curl_close($curl);
-
-        if(strpos($result, "503 Service Temporarily Unavailable") === FALSE && strlen($result) > 0){ //*DTA could just check status=503, or move this above the check for 200
-            # Return results if success
-            $json = json_decode($result, true);
-            if(json_last_error() != JSON_ERROR_NONE){
-                throw new \Exception("Failed to POST. Result was not json.");
-            }
-            return $json;
-        }
-
-        sleep(API_SLEEP_SECONDS);
-    }
-    # API request failed too many times
-    throw new \Exception("POST attempt failed too many times.");
-}
-
-function POSTv2($endpoint, $Email, $Password, $data = array()){
-    $url = \Simplifier::ApiV2BaseUrl($Email, $Password) . $endpoint;
-
-    #echo"URL: ",$url,"\n";
-
-    $curl = curl_init();
-
-    $data_string = json_encode($data);
-    curl_setopt($curl, CURLOPT_HTTPHEADER, array(
-        'Content-Type: application/json',
-        'Content-Length: ' . strlen($data_string)));
-    curl_setopt($curl, CURLOPT_POSTFIELDS, $data_string);
-    curl_setopt($curl, CURLOPT_POST, TRUE);
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
-
-    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, \Simplifier::ApiVerifiesSsl());
-    curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, \Simplifier::ApiVerifiesSsl());
-
-    curl_setopt($curl, CURLOPT_URL, $url);
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
-
-    $result = curl_exec($curl);
-
-    $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-    #echo "STATUS: ",$status;
-    #echo"\nRESULT: \n";print_r($result);
-
-    $ResultJson = json_decode($result, true);
-    if(json_last_error() != JSON_ERROR_NONE){
-        throw new \Exception("Failed to POST. Result was not json. Result:\n\n".print_r($result,true));
-    }
-
-    return array(
-        "httpStatusCode" => $status,
-        "result" => $ResultJson);
-}
-
-// Do a cURL call to GET, POST, PUT, or DELETE over HTTP(S)
-//
-// $url: e.g. https://api.theresumator.com
-// $method: 'POST', 'PUT', 'DELETE', or 'GET'
-// $data: array("param" => "value") ==> index.php?param=value
-// $json_encoding: TRUE if json_encode on outbound and json_decode on inbound
-function curl_call($method, $url, $data = FALSE, $json_encoding=FALSE) {
-#*DTA not used anywhere... can we kill this?
-    //*DTA TODO fix up to match other functions then remove this.
-    $curl = curl_init();
-
-    switch ($method) {
-
-    case 'POST':
-        if ($data) {
-            $data_string = json_encode($data);
-            curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type: application/json',
-                                                  'Content-Length: ' . strlen($data_string)));
-            curl_setopt($curl, CURLOPT_POSTFIELDS, $data_string);
-            curl_setopt($curl, CURLOPT_POST, TRUE);
-            curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
-        } else {
-            return "{'error':'Data must be provided for a POST'}";
-        }
-        break;
-
-     case 'PUT':
-        curl_setopt($curl, CURLOPT_PUT, TRUE);
-        break;
- 
-     case 'DELETE':
-        if($data)
-        {
-            $data_string = json_encode($data);
-            curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type: application/json',
-                                                  'Content-Length: ' . strlen($data_string)));
-            curl_setopt($curl, CURLOPT_POSTFIELDS, $data_string);
-            curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'DELETE');
-        }else {
-            return "{'error':'Data must be provided for a DELETE'}";
-        }
-        break;
- 
-     default:  // Including 'GET'
-        if ($data) {
-            $url = sprintf("%s?%s", $url, http_build_query($data));
-        }
-    }
-    //die($url);
-    curl_setopt($curl, CURLOPT_URL, $url);
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
- 
-     $curl_return = curl_exec($curl);
-  curl_close($curl);
- 
-    if ($json_encoding) {
-        return json_decode($curl_return, TRUE);
-    } else {
-        return $curl_return;
-    }
-}
 
 function GetAlertText(){
     # https://gist.github.com/benjaminlazarecki/2888851
@@ -424,7 +68,7 @@ function AssertAlertText($text){
 }
 
 function AssertEqual($expected, $actual, $description=''){
-    if($expected != $actual){ #*DTA should be !==
+    if($expected != $actual){
         throw new \Exception("Expected value > $expected\ndid not equal\nactual value >   $actual\n$description");
     }
 }
@@ -532,23 +176,6 @@ function CastArray($Hash){
     return $Args;
 }
 
-function Click($CssIdentifier){
-    if(!is_string($CssIdentifier) && get_class($CssIdentifier) == "Behat\Mink\Element\NodeElement"){
-        # If someone passed a NodeElement instead of an identifier...
-        WrapIt($CssIdentifier)->Click();
-        return;
-    }
-    if(!is_string($CssIdentifier)){
-        throw new \Exception("Incorrect parameter type passed to Click() function.");
-    }
-#*DTA TODO WE SHOULD SPIN UNTIL THE DOM IS VISIBLE.
-#Now, we sometimes have to do a WaitUntilDomIsVisible(), like here:
-    #     WaitUntilDomIsVisible(".job-dropdown");
-    #     Click(".job-dropdown");
-    #
-    Dom($CssIdentifier)->Click();
-}
-
 function CurrentDomain(){ //*lgm This exists somewhere within behat, but I am having trouble find it again.
     $url = \Simplifier::$F->getSession()->getCurrentUrl();
     return substr($url, 0, strpos($url, "/", 8));
@@ -557,8 +184,7 @@ function CurrentDomain(){ //*lgm This exists somewhere within behat, but I am ha
 function CurrentEnvironment(){
     #*CDT: For returning the domain only - no subdomains - primarily for widgets.feature
     $url = \Simplifier::$F->getMinkParameter('base_url');
-    DebugEcho("\n*DTA need to document this in .md AND verify substr stuff is ok\n");
-    return substr($url, strpos($url,'.')+1); // Get everything from base_url after the first periodß
+    return substr($url, strpos($url,'.')+1); // Get everything from base_url after the first period
 }
 
 function CurrentRelativeUrl(){
@@ -569,20 +195,10 @@ function CurrentUrl(){
     return \Simplifier::$F->getSession()->getCurrentUrl();
 }
 
-function DebugEcho($Text){#*DTA document in md
+function DebugEcho($Text){
     if(true){
         echo $Text;
     }
-}
-
-function Dom($CssIdentifier){
-    $NodeElement = \Simplifier::$F->getSession()->getPage();
-
-    $Wrapper = WrapIt($NodeElement);
-
-    $WrappedDoms = $Wrapper->DomsByCss($CssIdentifier);
-
-    return $WrappedDoms[0];
 }
 
 function DomBy(){
@@ -605,73 +221,23 @@ function DomsBy(){
     return $Wrapper->DomsBy($args);
 }
 
-function DomByTextContains($TagName, $Text){ #*DTA DELETE!!!!
-    # $TagName   Type of element, ie "div" or "a"
-    # $Text      Text to search for
-    $doms = DomsByTextContains($TagName, $Text);
-    return $doms[0];
-}
-function DomsByTextContains($tagName, $text, $SecondsToWait = 15){ #*DTA TODO CONVERT TO DomWrapper
-    # $tagName        Type of element, ie "div" or "a"
-    # $text           Text to search for
-    # $SecondsToWait  How many seconds to wait for dom
-    if(strlen($text) == 0){
-        throw new \Exception("Text argument is missing. Did you accidentally pass the text to tagName parameter?");
-    }
-
-    $OneTenthOfASecond = 100000;
-    $StartTime = time();
-    $Selector = '//'.$tagName.'[contains(text(),"'.$text.'")]';  //*DTA probably has problems if selecting text with quotes in it
-
-    while(true){
-        $Doms = \Simplifier::$F->getSession()->getPage()->findAll('xpath', $Selector);
-        $TimeSinceStart = time() - $StartTime;
-        if($TimeSinceStart > $SecondsToWait){
-            throw new \Exception("Waiting for text \n  $text\nfailed after about $SecondsToWait seconds.\n\n".Backtrace());
-        }
-        try{
-            $set = array();
-            foreach($Doms as $dom){
-                if($dom->isVisible()){
-                    $set[] = $dom;
-                }
-            }
-            if(sizeof($set) > 0){ #DANGEROUS!!!! But we rely on it for clicking save button when create workflow...
-                return $set;
-            }
-            usleep($OneTenthOfASecond);
-        } catch(\Exception $e){
-            usleep($OneTenthOfASecond);
-        }
-    }
-}
-function Doms($CssIdentifier){
-    $NodeElement = \Simplifier::$F->getSession()->getPage();
-
-    $Wrapper = WrapIt($NodeElement);
-
-    return $Wrapper->DomsByCss($CssIdentifier);
-}
-
-function DumpRemembered(){//*DTA PUT IN SIMPLIFIER.MD
+function DumpRemembered(){
     echo"\n";
     foreach(\Simplifier::$Memory as $Key => $Value){
         echo $Key," = ", $Value,"\n";
     }
 }
 
-function Email($alias = '', $useTestId = true){ //*DTA grep resumator.automated.tests and replace with this function
-    $alias = str_replace("'","",$alias); // Do not use apostrophes in email
-    $alias = str_replace("\n","",$alias);
-    $alias = str_replace("é", "e", $alias);
-
-    if($useTestId){
-        $alias .= ($alias ? "_" : "" ) .TestId();
-    }
-    return 'b+'.strtolower($alias).'@theresumator.com'; # Emails are stored in database as lowercase, anyway, so this helps with validating API, etc
-
-    // FOR LOGGING INTO GMAIL: return 'resumator.automated.tests+'.TestId().'_'.$alias.'@gmail.com';
-}
+#function Email($alias = '', $useTestId = true){
+#    $alias = str_replace("'","",$alias);    # Do not use apostrophes in email
+#    $alias = str_replace("\n","",$alias);
+#    $alias = str_replace("é", "e", $alias);
+#
+#    if($useTestId){
+#        $alias .= ($alias ? "_" : "" ) .TestId();
+#    }
+#    return 'sometrhing+'.strtolower($alias).'@gmail.com';
+#}
 
 # String comparison function
 function EndsWith($haystack, $needle){
@@ -693,19 +259,6 @@ function Forget(){
     }
     for($i=0;$i<sizeof($args);$i++){
         unset(\Simplifier::$Memory[$args[$i]]);
-    }
-}
-
-# arguments should be grouped in twos: 1. css identifier, 2. value
-function FormFill(){
-    $args = func_get_args();
-    if(sizeof($args) == 0 || sizeof($args)%2 != 0){
-        throw new \Exception(__FUNCTION__.'(): Arguments passed to fill were improperly defined.');
-    }
-    for($i=0;$i<sizeof($args);$i+=2){
-        $Dom = Dom($args[$i+0]);
-        $Value = $args[$i+1];
-        $Dom->SetValue($Value);
     }
 }
 
@@ -732,18 +285,7 @@ function OverrideDefault($Hash, $Key, $Default){
     return $Default;
 }
 
-function Query($query,$arguments){
-    if(!\Simplifier::$CanQueryDatabase){
-        throw new \Exception("You cannot query the database using your selected behat profile.");
-    }
-    $prepare = \Simplifier::$dbc->prepare($query);
-    $prepare->execute($arguments);
-    # Use ->fetch() or ->fetchAll() to get values
-    return $prepare;
-}
-
 function Random($length){
-    # Ripped from developurr
     # Returns alphanumeric string
     $randstr = "";
     for($i=0; $i<$length; $i++){
@@ -761,7 +303,6 @@ function Random($length){
 
 function Recall($name){
     if(!isset(\Simplifier::$Memory[$name])){
-
         throw new \Exception("[[$name]] was not defined or forgotten.\n".Backtrace());
     }
     return \Simplifier::$Memory[$name]['value'];
@@ -792,7 +333,7 @@ function Remember(){
         }
         \Simplifier::$Memory[$name] = array(
             'value' => $value,
-            'trace' => '*DTA TODO store where this variable was set',//TODO
+            'trace' => '*DTA TODO store where this variable was set',
             );
     }
 }
@@ -891,14 +432,6 @@ function TestId(){
     return \Simplifier::$TestId;
 }
 
-function UniqueFemaleName(){
-    return \Name::GetUniqueFemaleName();
-}
-
-function UniqueMaleName(){
-    return \Name::GetUniqueMaleName();
-}
-
 function Visit($url){
     \Simplifier::$F->visit($url);
 }
@@ -933,9 +466,7 @@ function WaitForCKEditor(){
 }
 
 function WaitForDom(){
-#TODO PUT IN SIMPLIFIER! 
-# AND PUT IN DOMWRAPPER WITH ABILITY TO SET ERROR MESSAGE! 
-#Replace AssertPageHasText or WaitUntilPageHasText with this, so you can optimize checks.
+    # Replace AssertPageHasText or WaitUntilPageHasText with this, so you can optimize checks.
 
     $args = func_get_args();
 
@@ -986,63 +517,6 @@ function WaitUntilPageHasText($Text, $SecondsToWait = 10){
     }
 }
 
-function WaitUntilPageHasTextOr($TextArray, $SecondsToWait = 10){
-    #*DTA This is a terrible waste of time because it will assert the first one 20 times before trying to assert the next one
-    #*DTA This is a terrible waste of time because it will assert the first one 20 times before trying to assert the next one
-    #*DTA This is a terrible waste of time because it will assert the first one 20 times before trying to assert the next one
-
-    $OneTenthOfASecond = 100000;
-    $StartTime = time();
-
-    while(true){
-        $TimeSinceStart = time() - $StartTime;
-        if($TimeSinceStart > $SecondsToWait){
-            throw new \Exception("Waiting for any text in \n  ".print_r($TextArray,true)."\nfailed after about $SecondsToWait seconds.");
-        }
-
-        foreach($TextArray as $Text){
-            try{
-                AssertPageHasText($Text); # Note that this adds some overhead to the test so it should always take more than $Seconds seconds to fail
-                return;
-            } catch(\Exception $e){
-            }
-            usleep($OneTenthOfASecond);
-        }
-    }
-}
-
-function WaitUntilDomIsText($Dom, $Text, $SecondsToWait = 10){
-    $OneTenthOfASecond = 100000;
-    $StartTime = time();
-
-    while(true){
-        $TimeSinceStart = time() - $StartTime;
-        if($TimeSinceStart > $SecondsToWait){
-            throw new \Exception("Waiting for text \n  $Text\nfailed after about $SecondsToWait seconds. The dom ended with containing text:\n".$Dom->getText());
-        }
-        if($Dom->getText() == $Text){
-            return;
-        }
-        usleep($OneTenthOfASecond);
-    }
-}
-
-function WaitUntilDomIsVisible($cssIdentifier, $SecondsToWait = 10){
-    $OneTenthOfASecond = 100000;
-    $StartTime = time();
-
-    while(true){
-        $TimeSinceStart = time() - $StartTime;
-        if($TimeSinceStart > $SecondsToWait){
-            throw new \Exception("Waiting for dom \n  $cssIdentifier\nto be visible failed after about $SecondsToWait seconds.");
-        }
-        $Dom = \Simplifier::$F->getSession()->getPage()->find('css', $cssIdentifier);
-        if($Dom != null && $Dom->isVisible()){
-            return;
-        }
-        usleep($OneTenthOfASecond);
-    }
-}
 function WrapIt($NodeElement){#*DTA PUT IN SIMPLIFIER.MD
     return new \DomWrapper($NodeElement);
 }
