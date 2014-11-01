@@ -476,7 +476,7 @@ Wait for ckeditor to load.
 #### WaitUntilPageHasText()
 Wait until some text appears on the page. This function sleeps a small amount of time and polls the page's contents until the text is found or too much time has elapsed. This is better than a simple `Wait()` or `sleep()` because they force the browser to pause the full amount of time specified.
 
-Ideally we would have a function that waits for page load, which could be used in instances where we first wait for ajax to complete and then we wait for a page load caused by ajax results. An ideal solution could not be found, so instead we can wait until text appears.
+DomBy() is a little faster, because you can wait for a specific dom, which means the entire page isn't searched.
 
 ```php
 $Text            # Text to wait for
