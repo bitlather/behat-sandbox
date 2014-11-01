@@ -1,4 +1,5 @@
 <?php
+#*DTA Note: Have to install using `php composer.phar require behat/mink-extension:*`
 
 use Behat\Behat\Context\ClosuredContextInterface,
     Behat\Behat\Context\TranslatedContextInterface,
@@ -6,6 +7,11 @@ use Behat\Behat\Context\ClosuredContextInterface,
     Behat\Behat\Exception\PendingException;
 use Behat\Gherkin\Node\PyStringNode,
     Behat\Gherkin\Node\TableNode;
+
+use Behat\MinkExtension\Context\MinkContext;
+
+require_once('global/Simplifier.php');
+
 
 //
 // Require 3rd-party libraries here:
@@ -17,18 +23,18 @@ use Behat\Gherkin\Node\PyStringNode,
 /**
  * Features context.
  */
-class FeatureContext extends BehatContext
+class FeatureContext extends MinkContext
 {
     /**
      * Initializes context.
      * Every scenario gets it's own context object.
      *
-     * @param array $parameters context parameters (set them up through behat.yml)
+     * @param array $contextParameters context parameters (set them up through behat.yml)
      */
-    public function __construct(array $parameters)
-    {
-        // Initialize your context here
+    public function __construct(array $contextParameters){ 
+        \Simplifier::Initialize($this, $contextParameters, 'features'); 
     }
+
 
 //
 // Place your definition and hook methods here:

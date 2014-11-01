@@ -21,6 +21,6 @@ class Variables{
             }
         }
 
-        echo"WARNING: Remember() variable name '$name' does not match recorded standards.\n";
+        DebugEcho("WARNING: Remember() variable name '$name' does not match recorded standards.\n");
     }
 }

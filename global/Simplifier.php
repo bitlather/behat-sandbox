@@ -8,11 +8,11 @@ class Simplifier{
         $StartTimers,              # StartTimer() and StopTimer() use this
         $Memory;                   # Where Remember(), Recall(), etc store their values
 
-    public static function IncludeConstants(){
-        require(getcwd()."/constants/disabilities.php");
-        require(getcwd()."/constants/genders.php");
-        require(getcwd()."/constants/races.php");
-    }
+#    public static function IncludeConstants(){
+#        require(getcwd()."/constants/disabilities.php");
+#        require(getcwd()."/constants/genders.php");
+#        require(getcwd()."/constants/races.php");
+#    }
 
     public static function Initialize($featureContext, $contextParameters, $suiteDirectory){
         date_default_timezone_set("America/New_York");
@@ -254,7 +254,7 @@ function Forget(){
 }
 
 function Javascript($code){
-    \Simplifier::$F->getSession()->evaluateScript($code);
+    return \Simplifier::$F->getSession()->evaluateScript($code);
 }
 
 function Backtrace(){
